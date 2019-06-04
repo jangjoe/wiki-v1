@@ -55,7 +55,10 @@ var mkdown = md({
   .use(mdExpandTabs, {
     tabWidth: 4
   })
-  .use(mdAttrs)
+  .use(mdAttrs, {
+    leftDelimiter: '{{',
+    rightDelimiter: '}}'
+  })
 
 if (appconfig.features.mathjax) {
   mkdown.use(mdMathjax)
@@ -300,7 +303,6 @@ const parseContent = (content) => {
   })
 
   // Mathjax Post-processor
-
   if (appconfig.features.mathjax) {
     return processMathjax(cr.html())
   } else {
@@ -317,18 +319,21 @@ const parseContent = (content) => {
 const processMathjax = (content) => {
   let matchStack = []
   let replaceStack = []
-  let currentMatch
+  let isMatched = false
   let mathjaxState = {}
+
+  const unescapeHTML = html => html.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
 
   _.forEach(mathRegex, mode => {
     do {
-      currentMatch = mode.regex.exec(content)
+      let currentMatch = mode.regex.exec(content)
+      isMatched = !!currentMatch
       if (currentMatch) {
         matchStack.push(currentMatch[0])
         replaceStack.push(
           new Promise((resolve, reject) => {
             mathjax.typeset({
-              math: (mode.format === 'MathML') ? currentMatch[0] : currentMatch[1],
+              math: unescapeHTML((mode.format === 'MathML') ? currentMatch[0] : currentMatch[1]),
               format: mode.format,
               speakText: false,
               svg: true,
@@ -345,7 +350,7 @@ const processMathjax = (content) => {
           })
         )
       }
-    } while (currentMatch)
+    } while (isMatched)
   })
 
   return (matchStack.length > 0) ? Promise.all(replaceStack).then(results => {
